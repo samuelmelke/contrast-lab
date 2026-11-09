@@ -1,0 +1,718 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MRI Contrast Lab</title>
+<style>
+/* Layout idea: one column for a hand-held phone. Plot first, controls under the thumb, one light theme. */
+:root{
+  color-scheme:light;
+  --paper:#E8EDF0; --panel:#FFFFFF; --ink:#131D26; --muted:#51606C; --rule:#C6D1D8; --grid:#E4EAEE; --signal:#FFC928;
+  --font-math:"STIX Two Text","Times New Roman",serif;
+  --font-body:"Atkinson Hyperlegible","Segoe UI",system-ui,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--paper);color:var(--ink);font:400 16px/1.4 var(--font-body);overflow-x:hidden;padding-bottom:calc(20px + env(safe-area-inset-bottom));-webkit-text-size-adjust:100%}
+button,input{font:inherit;color:inherit}
+button{cursor:pointer;touch-action:manipulation}
+:focus-visible{outline:3px solid var(--ink);outline-offset:2px}
+i{font-family:var(--font-math)}
+sub,sup{font-size:.68em;line-height:0}
+.top{position:sticky;top:0;z-index:5;background:var(--panel);border-bottom:1px solid var(--rule);padding:8px 14px 7px}
+.top-row{display:flex;justify-content:space-between;align-items:baseline;gap:10px;max-width:760px;margin:0 auto}
+.top-row strong{font:600 17px/1.2 var(--font-math)}
+.top-row span{color:var(--muted);font-size:14px}
+.steps{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;max-width:760px;margin:6px auto 0;padding:0;list-style:none}
+.steps li{text-align:center;font-size:13px;line-height:24px;border-radius:4px;background:var(--paper);color:var(--muted)}
+.steps li.on{background:var(--signal);color:var(--ink);font-weight:700}
+main{display:grid;gap:12px;max-width:760px;margin:0 auto;padding:12px 14px}
+.ask,.lab,.explain,.wait{background:var(--panel);border:1px solid var(--rule);border-radius:8px;padding:13px}
+.fold{display:none;width:100%;background:none;border:0;padding:2px 0;text-align:left;font-weight:700;justify-content:space-between;align-items:center;min-height:32px}
+.fold em{font-style:normal;color:var(--muted);font-weight:400;font-size:14px}
+.ask.compact .fold{display:flex}
+.ask.compact.closed .ask-body{display:none}
+.ask-body{display:grid;gap:11px}
+.ask.compact .ask-body{margin-top:8px}
+.kicker{color:var(--muted);font-size:14px}
+.stem{font:400 20px/1.3 var(--font-math);margin:0;text-wrap:pretty}
+.ask.compact .stem{font-size:17px}
+.opts{display:grid;gap:8px;margin:0;padding:0;list-style:none}
+.opt{display:grid;grid-template-columns:1.5em 1fr auto;gap:5px;align-items:center;width:100%;min-height:50px;text-align:left;background:var(--panel);border:1.5px solid var(--rule);border-radius:7px;padding:9px 12px;font-size:17px;line-height:1.25}
+.opt b{font-family:var(--font-math);font-weight:600}
+.opt em{font-style:normal;font-size:13px;color:var(--muted)}
+.opt.vote{border-color:var(--ink);box-shadow:inset 0 0 0 1px var(--ink);background:#F3F6F8}
+.opt.right{background:var(--signal);border-color:var(--ink);box-shadow:inset 0 0 0 1px var(--ink)}
+.opt.right em{color:var(--ink);font-weight:700}
+.opt:disabled{cursor:default;color:var(--ink);opacity:1}
+.wait{text-align:center;padding:26px 16px}
+.wait h2{font:400 26px/1.15 var(--font-math);margin:0 0 5px}
+.wait p{margin:0;color:var(--muted)}
+.explain{display:grid;gap:9px;border-left:5px solid var(--signal);font-size:16px;line-height:1.38}
+.explain p{margin:0}
+.rule-keep{font-family:var(--font-math);font-size:1.1em;font-weight:600}
+.eq{font-family:var(--font-math);font-size:1.08em;line-height:1.55;overflow-x:auto}
+.frac{display:inline-flex;flex-direction:column;align-items:center;vertical-align:middle;line-height:1.15}
+.frac>span:first-child{border-bottom:1px solid currentColor;padding:0 .3em}
+.frac>span:last-child{padding:0 .3em}
+.lab-body{display:flex;flex-direction:column;gap:12px;min-width:0}
+.lab-body>*{order:4;min-width:0}
+.lab-body>.chart,.lab-body>.row,.lab-body>.brains,.lab-body>.kspace{order:1}
+.lab-body>.ctls{order:2}
+.lab-body>.presets{order:3}
+.ctls{display:grid;gap:9px}
+.ctl{display:grid;grid-template-columns:1fr auto;gap:0 10px;align-items:baseline}
+.ctl label{color:var(--muted);font-size:15px}
+.ctl output{font-weight:700;font-variant-numeric:tabular-nums}
+.ctl input[type=range]{grid-column:1/-1;width:100%;height:36px;margin:0;background:none;-webkit-appearance:none;appearance:none;touch-action:pan-y}
+input[type=range]::-webkit-slider-runnable-track{height:6px;background:var(--rule);border-radius:3px}
+input[type=range]::-moz-range-track{height:6px;background:var(--rule);border-radius:3px}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:28px;height:28px;margin-top:-11px;border-radius:50%;background:var(--ink);border:3px solid #fff;box-shadow:0 0 0 1px var(--ink)}
+input[type=range]::-moz-range-thumb{width:24px;height:24px;border-radius:50%;background:var(--ink);border:3px solid #fff}
+.presets{display:flex;flex-wrap:wrap;gap:7px;align-items:center}
+.presets>span{color:var(--muted);font-size:15px}
+.chip{border:1px solid var(--rule);background:var(--panel);border-radius:6px;padding:7px 12px;min-height:40px;font-size:15px;line-height:1.15}
+.chip[aria-pressed=true]{background:var(--ink);color:#fff;border-color:var(--ink)}
+.check{display:flex;gap:7px;align-items:center;min-height:40px}
+.check input{width:20px;height:20px}
+.row{display:flex;flex-direction:column;gap:14px;min-width:0}
+.chart{display:flex;flex-direction:column;min-width:0}
+.chart h3,.panel-title{margin:0 0 3px;font-size:15px;font-weight:700}
+.legend{display:flex;flex-wrap:wrap;gap:2px 13px;font-size:14px;color:var(--muted)}
+.legend span{display:inline-flex;align-items:center;gap:5px}
+.legend svg{width:20px;height:8px}
+.plot{position:relative;touch-action:pan-y}
+.svgbox{position:absolute;inset:0}
+.svgbox svg{width:100%;height:100%;display:block}
+.t-axis{font:13px var(--font-body);fill:var(--muted)}
+.t-title{font:14px var(--font-body);fill:var(--muted)}
+.t-lab{font:13px var(--font-body);fill:var(--ink)}
+.t-vl{font:600 13px var(--font-body);fill:var(--ink);paint-order:stroke;stroke:#fff;stroke-width:4px;stroke-linejoin:round}
+.tip{position:absolute;pointer-events:none;background:var(--ink);color:#fff;padding:5px 9px;border-radius:5px;font-size:13px;line-height:1.3;white-space:nowrap;z-index:2;font-variant-numeric:tabular-nums}
+.tip[hidden]{display:none}
+.tip i{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:5px;font-family:inherit}
+.tiles{display:grid;grid-template-columns:1fr 1fr;gap:9px 12px;border-top:1px solid var(--rule);padding-top:10px}
+.tile small{display:block;color:var(--muted);font-size:13px;line-height:1.2}
+.tile strong{font-size:21px;font-variant-numeric:tabular-nums;line-height:1.2;font-weight:700}
+.tile span{color:var(--muted);font-size:12px;margin-left:4px}
+table.mini{border-collapse:collapse;font-variant-numeric:tabular-nums;width:100%;font-size:13px}
+table.mini th{font-weight:400;color:var(--muted);text-align:right;padding:2px 4px;border-bottom:1px solid var(--rule);vertical-align:bottom;line-height:1.15}
+table.mini td{text-align:right;padding:3px 4px;font-weight:700}
+table.mini th:first-child,table.mini td:first-child{text-align:left;font-weight:400}
+.sw{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px}
+.brains{display:flex;gap:9px;justify-content:center;min-width:0}
+.brain{display:flex;flex-direction:column;align-items:center;gap:4px;flex:1 1 0;min-width:0;margin:0}
+.brain canvas{image-rendering:pixelated;display:block;width:100%;max-width:230px;height:auto;aspect-ratio:160/192;background:#000;border-radius:4px}
+.brain figcaption,.cap{text-align:center;font-size:13px;line-height:1.25}
+.side{flex:none!important;display:flex;flex-direction:column}
+.brains{flex:none!important}
+.sliced{display:flex;flex-direction:column}
+.sliced .plot{height:min(78vw,430px)}
+.kspace{display:flex;gap:14px;align-items:center}
+.kspace canvas{width:42%;max-width:230px;aspect-ratio:1;height:auto;background:#EEF1F3;border:1px solid var(--rule);image-rendering:pixelated;flex:none}
+.kclock{font:400 30px/1.05 var(--font-math);font-variant-numeric:tabular-nums}
+.go{background:var(--ink);color:#fff;border:0;border-radius:6px;padding:10px 15px;min-height:44px;font-weight:700}
+.model{color:var(--muted);font-size:12.5px;text-align:center;padding:0 16px;margin:0}
+.model a{color:inherit}
+#net{color:#9A3B00;font-weight:700}
+@media (prefers-reduced-motion:reduce){*{scroll-behavior:auto!important}}
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="top-row"><strong>MRI Contrast Lab</strong><span><span id="net"></span> <span id="where"></span></span></div>
+  <ol class="steps" id="steps"><li>Vote</li><li>Simulate</li><li>Answer</li></ol>
+</header>
+<main id="main"></main>
+<p class="model">Model: ideal spoiled gradient echo, instantaneous readout. Questions, tissue model and brain map adapted from the course repository <a href="https://github.com/Donders-Institute/QuizzesMRImageEncodingForFMRI">QuizzesMRImageEncodingForFMRI</a> (Donders Institute).</p>
+
+<script src="https://cdn.jsdelivr.net/npm/firebase@13.1.0/firebase-app-compat.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/firebase@13.1.0/firebase-auth-compat.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/firebase@13.1.0/firebase-database-compat.js"></script>
+<script src="firebase-config.js"></script>
+<script id="physics">
+/* ---------- MR physics: pure functions, no DOM. All times in ms, angles in degrees. ---------- */
+const RAD = Math.PI/180;
+const TISSUE = {
+  1.5:{T1:[600,900,3500],  T2s:[66,84,100]},
+  3:  {T1:[830,1330,4000], T2s:[53,66,100]},
+  7:  {T1:[1100,1800,4000],T2s:[26,33,100]}
+};
+const PD = [0.70,0.82,1.00];
+
+function spgr(flip,TR,T1){ const E=Math.exp(-TR/T1),a=flip*RAD; return Math.sin(a)*(1-E)/(1-Math.cos(a)*E); }
+function ernst(TR,T1){ return Math.acos(Math.exp(-TR/T1))/RAD; }
+function optimumTE(a,b){ return Math.abs(a-b)<1e-9 ? a : Math.log(b/a)/(1/a-1/b); }
+function contrastTE(TE,a,b){ return Math.abs(Math.exp(-TE/a)-Math.exp(-TE/b)); }
+
+/* Signal after each excitation, starting from full Mz (matches simApproachSteadyState.m). */
+function approach(T1,TR,flip,n){
+  const E=Math.exp(-TR/T1),c=Math.cos(flip*RAD),s=Math.sin(flip*RAD); let Mz=1; const out=[];
+  for(let k=0;k<n;k++){ out.push(s*Mz); Mz=c*Mz*E+1-E; }
+  return out;
+}
+/* First excitation (1-based) from which the signal stays within tol of steady state. */
+function settleCount(T1,TR,flip,tol=0.01){
+  const ss=spgr(flip,TR,T1), sig=approach(T1,TR,flip,5000);
+  for(let k=0;k<sig.length;k++) if(Math.abs(sig[k]-ss)/ss<tol) return k+1;
+  return Infinity;
+}
+function bestContrastFlip(T1a,T1b,TR){
+  const C=f=>Math.abs(spgr(f,TR,T1a)-spgr(f,TR,T1b));
+  let bf=0,bc=-1;
+  for(let f=0.5;f<=180;f+=0.5){ const c=C(f); if(c>bc){bc=c;bf=f;} }
+  for(let f=Math.max(0,bf-0.5);f<=bf+0.5;f+=0.01){ const c=C(f); if(c>bc){bc=c;bf=f;} }
+  return {flip:bf,contrast:bc};
+}
+function efficiency(T1a,T1b,TR){ return bestContrastFlip(T1a,T1b,TR).contrast*100/Math.sqrt(TR); }
+
+/* Steady-state signals for WM, GM, CSF (ports the signal equations of simContrast.m). */
+function imageSignal(field,TR,TE,flip,opt={}){
+  const {T1,T2s}=TISSUE[field]; const a=flip*RAD;
+  return T1.map((t1,i)=>{
+    let s;
+    if(opt.inv){
+      const TI=opt.TI, Mm=(1-Math.exp(-(TR-TI)/t1)+(1-Math.exp(-TI/t1))*Math.cos(a)*Math.exp(-(TR-TI)/t1))/(1+Math.exp(-TR/t1)*Math.cos(a));
+      s=Math.abs(((1-Math.exp(-TI/t1))-Mm*Math.exp(-TI/t1))*Math.sin(a));
+    } else s=spgr(flip,TR,t1);
+    return s*Math.exp(-TE/T2s[i])*(opt.pd?PD[i]:1);
+  });
+}
+/* Mz over one TR for tissue i: returns [t,M] from -TR/4 to 5TR/4 (steady state). */
+function mzCurve(field,TR,flip,opt={},i=0,n=240){
+  const t1=TISSUE[field].T1[i], a=flip*RAD, ts=[], ms=[];
+  let M;
+  if(opt.inv){
+    const TI=opt.TI, Mm=(1-Math.exp(-(TR-TI)/t1)+(1-Math.exp(-TI/t1))*Math.cos(a)*Math.exp(-(TR-TI)/t1))/(1+Math.exp(-TR/t1)*Math.cos(a));
+    const Mti=(1-Math.exp(-TI/t1))-Mm*Math.exp(-TI/t1);
+    M=t=> t<=TI ? (1-Math.exp(-t/t1))-Mm*Math.exp(-t/t1) : (1-Math.exp(-(t-TI)/t1))+Mti*Math.cos(a)*Math.exp(-(t-TI)/t1);
+  } else {
+    const Mm=(1-Math.exp(-TR/t1))/(1-Math.cos(a)*Math.exp(-TR/t1));
+    M=t=> 1-Math.exp(-t/t1)+Mm*Math.cos(a)*Math.exp(-t/t1);
+  }
+  for(let k=0;k<=n;k++){
+    const t=-TR/4+1.5*TR*k/n, w=((t%TR)+TR)%TR;
+    ts.push(t); ms.push(M(w));
+  }
+  return [ts,ms];
+}
+
+/* Through-slice motion with a full slice stack. A single step of the tissue happens halfway through
+   volume moveVol (0-based). shiftPct>0 moves tissue toward higher slice numbers. Returns signal[vol][slice]. */
+function sliceOrder(N,order){
+  if(order==='sequential') return Array.from({length:N},(_,i)=>i);
+  const o=[]; for(let i=0;i<N;i+=2)o.push(i); for(let i=1;i<N;i+=2)o.push(i); return o;
+}
+function spinHistory({N=48,nsub=20,TR,T1,flip,order='interleaved',shiftPct=50,nVol=20,moveVol=10}){
+  const d=Math.round(shiftPct/100*nsub), margin=nsub*2, nCells=N*nsub+2*margin;
+  const Mz=new Float64Array(nCells).fill(1), ord=sliceOrder(N,order);
+  const E=Math.exp(-(TR/N)/T1), c=Math.cos(flip*RAD), s=Math.sin(flip*RAD), half=Math.floor(N/2);
+  const sig=[];
+  for(let v=0;v<nVol;v++){
+    const row=new Float64Array(N);
+    for(let r=0;r<N;r++){
+      if(v>0||r>0) for(let j=0;j<nCells;j++) Mz[j]=1-(1-Mz[j])*E;
+      const moved=v>moveVol||(v===moveVol&&r>=half), sh=moved?d:0, sl=ord[r];
+      let sum=0;
+      for(let k=0;k<nsub;k++){ const j=sl*nsub+k-sh+margin; sum+=Mz[j]; Mz[j]*=c; }
+      row[sl]=s*sum/nsub;
+    }
+    sig.push(row);
+  }
+  return {sig,ord,half,moveVol};
+}
+/* Percent change caused by the motion, slice by slice, against the same run without motion. */
+function spinDeviation(p){
+  const m=spinHistory(p), b=spinHistory({...p,shiftPct:0});
+  const dev=m.sig.map((row,v)=>Array.from(row,(x,s)=>100*(x/b.sig[v][s]-1)));
+  return {dev,ord:m.ord,half:m.half,moveVol:m.moveVol};
+}
+function tsnr(snr,limit){ return snr/Math.sqrt(1+(snr/limit)*(snr/limit)); }
+</script>
+<script id="app">
+const CHARTS=[];
+
+/* ---------- helpers ---------- */
+const el=(t,c,html)=>{const e=document.createElement(t); if(c)e.className=c; if(html!=null)e.innerHTML=html; return e;};
+const fx=(v,d=0)=>Number(v).toLocaleString('en-US',{minimumFractionDigits:d,maximumFractionDigits:d});
+const clamp=(v,a,b)=>Math.min(b,Math.max(a,v));
+const CSSV=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const C={wm:'#2B62C9',gm:'#0F8F6B',csf:'#EE7B30',ink:'#131D26',muted:'#51606C',grid:'#E4EAEE',rule:'#C6D1D8',loss:'#5B2A86',gain:'#C96F00',zero:'#EEF1F3'};
+const T1='<i>T</i><sub>1</sub>', T2='<i>T</i><sub>2</sub>', T2s=T2+'*', A='<i>α</i>';
+const frac=(n,d)=>`<span class="frac"><span>${n}</span><span>${d}</span></span>`;
+let uid=0;
+
+function slider(box,{label,min,max,step=1,value,unit='',log=false,fmt,onInput}){
+  const id='ctl'+(++uid), w=el('div','ctl');
+  const lab=el('label',null,label); lab.htmlFor=id;
+  const out=el('output'); out.htmlFor=id;
+  const inp=el('input'); inp.type='range'; inp.id=id;
+  const toPos=v=>Math.round(1000*Math.log(v/min)/Math.log(max/min));
+  const snap=v=>log?(v>=100?Math.round(v/5)*5:v>=10?Math.round(v):Math.round(v*10)/10):Math.round(v/step)*step;
+  if(log){inp.min=0;inp.max=1000;inp.step=1;} else {inp.min=min;inp.max=max;inp.step=step;}
+  let cur=value;
+  const show=()=>{out.textContent=(fmt?fmt(cur):fx(cur,step<1&&!log?1:(log&&cur<10?1:0)))+(unit?' '+unit:'');};
+  const sync=()=>{inp.value=log?toPos(cur):cur;show();};
+  inp.addEventListener('input',()=>{cur=log?snap(min*Math.pow(max/min,inp.value/1000)):+inp.value;show();onInput&&onInput(cur,true);});
+  w.append(lab,out,inp); box.append(w); sync();
+  return {get value(){return cur},set(v,silent){cur=v;sync();if(!silent&&onInput)onInput(cur,false);},inp};
+}
+function presets(box,label,list){
+  const p=el('div','presets'); if(label)p.append(el('span',null,label));
+  list.forEach(({t,f})=>{const b=el('button','chip',t);b.type='button';b.onclick=e=>{f();if(e.detail)b.blur();};p.append(b);});
+  box.append(p); return p;
+}
+function segmented(box,label,items,val,on){
+  const p=el('div','presets'); if(label)p.append(el('span',null,label));
+  const bs=items.map(({v,t})=>{const b=el('button','chip',t);b.type='button';b.setAttribute('aria-pressed',v===val);
+    b.onclick=e=>{bs.forEach(x=>x.setAttribute('aria-pressed',x===b));on(v);if(e.detail)b.blur();};p.append(b);return b;});
+  box.append(p);return p;
+}
+function tiles(box,defs){
+  const w=el('div','tiles'), m={};
+  defs.forEach(([k,l])=>{const t=el('div','tile',`<small>${l}</small><strong></strong><span></span>`);w.append(t);m[k]=t;});
+  box.append(w);
+  return (k,v,sub='')=>{m[k].querySelector('strong').textContent=v;m[k].querySelector('span').textContent=sub;};
+}
+
+/* ---------- line chart: one y-axis, legend plus end labels, crosshair tooltip ---------- */
+function ticks(a,b,n=5){
+  const raw=(b-a)/n, mag=10**Math.floor(Math.log10(raw)), e=raw/mag;
+  const st=(e>=7.5?10:e>=3.5?5:e>=1.5?2:1)*mag, o=[];
+  for(let v=Math.ceil(a/st-1e-9)*st;v<=b+st*1e-6;v+=st)o.push(+v.toFixed(10));
+  return {v:o,st};
+}
+let clipN=0;
+class Chart{
+  constructor(host,o={}){
+    this.o={w:640,h:290,ml:58,mt:12,mb:46,...o}; this.host=host; host.classList.add('chart');
+    if(o.title)host.append(el('h3',null,o.title));
+    this.leg=el('div','legend'); this.wrap=el('div','plot'); this.sv=el('div','svgbox'); this.tip=el('div','tip'); this.tip.hidden=true;
+    this.wrap.append(this.sv,this.tip); host.append(this.leg,this.wrap); this.clip='clip'+(++clipN);
+    CHARTS.push(this);this.wrap.addEventListener('pointerdown',e=>this.hover(e));this.wrap.addEventListener('pointermove',e=>this.hover(e));
+    this.wrap.addEventListener('pointerleave',()=>this.unhover());
+  }
+  draw(s){
+    this.s=s; const o=this.o, cw=this.host.clientWidth||Math.min(document.documentElement.clientWidth-54,700), W=Math.max(280,Math.min(cw,720)), H=Math.round(Math.min(W*0.72,340)); this.wrap.style.height=H+'px'; const endsOn=W>=460;
+    const len=endsOn?Math.max(0,...s.series.map(x=>(x.short??x.name??'').length)):0;
+    const mr=s.series.length&&len?22+len*7.7:14;
+    const x0=o.ml,x1=W-mr,y0=H-o.mb,y1=o.mt; const [xa,xb]=s.x;
+    const X=s.logx?v=>x0+(x1-x0)*Math.log(v/xa)/Math.log(xb/xa):v=>x0+(x1-x0)*(v-xa)/(xb-xa);
+    let ya,yb;
+    if(s.y)[ya,yb]=s.y; else {let m=0;s.series.forEach(q=>q.y.forEach(v=>{if(isFinite(v)&&v>m)m=v;}));ya=0;yb=m*1.1||1;}
+    const Y=v=>y0-(y0-y1)*(v-ya)/(yb-ya); Object.assign(this,{X,Y,x0,x1,y0,y1,xa,xb});
+    let g='';
+    const yt=ticks(ya,yb,5).v;
+    const yfmt=v=>{const st=yt.length>1?Math.abs(yt[1]-yt[0]):1;return fx(v,st>=1?0:st>=0.1?1:st>=0.01?2:3);};
+    yt.forEach(v=>{g+=`<line x1="${x0}" x2="${x1}" y1="${Y(v)}" y2="${Y(v)}" stroke="${v===0?C.rule:C.grid}"/><text class="t-axis" x="${x0-7}" y="${Y(v)+4.5}" text-anchor="end">${yfmt(v)}</text>`;});
+    const xt=s.logx?(W<460?[1,10,100,1000]:[1,3,10,30,100,300,1000,3000,10000]).filter(v=>v>=xa&&v<=xb):ticks(xa,xb,W<460?Math.min(s.xn||5,5):(s.xn||7)).v;
+    xt.forEach(v=>{g+=`<line x1="${X(v)}" x2="${X(v)}" y1="${y0}" y2="${y0+5}" stroke="${C.rule}"/><text class="t-axis" x="${X(v)}" y="${y0+19}" text-anchor="middle">${fx(v)}</text>`;});
+    g+=`<line x1="${x0}" x2="${x1}" y1="${y0}" y2="${y0}" stroke="${C.rule}"/>`;
+    g+=`<text class="t-title" x="${(x0+x1)/2}" y="${H-7}" text-anchor="middle">${s.xlab||''}</text>`;
+    g+=`<text class="t-title" transform="translate(14 ${(y0+y1)/2}) rotate(-90)" text-anchor="middle">${s.ylab||''}</text>`;
+    g+=`<clipPath id="${this.clip}"><rect x="${x0}" y="${y1-3}" width="${x1-x0+1}" height="${y0-y1+6}"/></clipPath><g clip-path="url(#${this.clip})">`;
+    (s.hlines||[]).forEach(h=>{g+=`<line x1="${x0}" x2="${x1}" y1="${Y(h.y)}" y2="${Y(h.y)}" stroke="${h.color||C.muted}" stroke-width="1.5" stroke-dasharray="${h.dash||'5 4'}"/>`;});
+    s.series.forEach(q=>{let d='';q.x.forEach((vx,i)=>{const vy=q.y[i];if(!isFinite(vy))return;d+=(d?'L':'M')+X(vx).toFixed(1)+' '+Y(vy).toFixed(1);});
+      g+=`<path d="${d}" fill="none" stroke="${q.color}" stroke-width="${q.w||2}" stroke-linejoin="round" stroke-linecap="round" ${q.dash?`stroke-dasharray="${q.dash}"`:''}/>`;});
+    g+='</g>';
+    (s.vlines||[]).forEach(v=>{if(v.x<xa||v.x>xb)return;const px=X(v.x),anc=px>x1-44?'end':px<x0+44?'start':'middle',ly=y1+13+(v.row||0)*16;
+      g+=`<line x1="${px}" x2="${px}" y1="${y1}" y2="${y0}" stroke="${v.color||C.ink}" stroke-width="${v.w||1.5}" ${v.solid?'':'stroke-dasharray="4 4"'}/>`;
+      if(v.label)g+=`<text class="t-vl" x="${px}" y="${ly}" text-anchor="${anc}">${v.label}</text>`;});
+    (s.points||[]).forEach(p=>{g+=`<circle cx="${X(p.x)}" cy="${Y(p.y)}" r="5" fill="${p.color||C.ink}" stroke="#fff" stroke-width="2"/>`;
+      if(p.label)g+=`<text class="t-vl" x="${X(p.x)+(p.dx??9)}" y="${Y(p.y)+(p.dy??-8)}" text-anchor="${p.anchor||'start'}">${p.label}</text>`;});
+    /* end labels, nudged apart */
+    const ends=s.series.filter(q=>endsOn&&(q.short??q.name)).map(q=>{let i=q.y.length-1;while(i>0&&!isFinite(q.y[i]))i--;return {q,y:clamp(Y(q.y[i]),y1+6,y0-6)};}).sort((a,b)=>a.y-b.y);
+    for(let i=1;i<ends.length;i++)if(ends[i].y-ends[i-1].y<16)ends[i].y=ends[i-1].y+16;
+    ends.forEach(e=>{g+=`<line x1="${x1+4}" x2="${x1+14}" y1="${e.y}" y2="${e.y}" stroke="${e.q.color}" stroke-width="3"/><text class="t-lab" x="${x1+18}" y="${e.y+4.5}">${e.q.short??e.q.name}</text>`;});
+    g+=`<g class="hair"></g>`;
+    this.sv.innerHTML=`<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="${(s.ylab||'')+' against '+(s.xlab||'')}">${g}</svg>`;
+    this.leg.innerHTML=s.series.length>1?s.series.map(q=>`<span><svg viewBox="0 0 20 8"><line x1="0" x2="20" y1="4" y2="4" stroke="${q.color}" stroke-width="${q.w||2.5}" ${q.dash?`stroke-dasharray="${q.dash}"`:''}/></svg>${q.name}</span>`).join(''):'';
+  }
+  hover(e){
+    const s=this.s; if(!s)return; const svg=this.sv.querySelector('svg'); if(!svg)return;
+    const pt=new DOMPoint(e.clientX,e.clientY).matrixTransform(svg.getScreenCTM().inverse());
+    if(pt.x<this.x0||pt.x>this.x1){this.unhover();return;}
+    const rows=[]; let hx=null,hpx=null; const hg=svg.querySelector('.hair'); let dots='';
+    s.series.forEach(q=>{let bi=0,bd=1e18;q.x.forEach((vx,i)=>{const d=Math.abs(this.X(vx)-pt.x);if(d<bd){bd=d;bi=i;}});
+      if(hx===null){hx=q.x[bi];hpx=this.X(hx);} if(isFinite(q.y[bi])){rows.push(`<div><i style="background:${q.color}"></i>${q.name}: ${(s.fy||(v=>fx(v,3)))(q.y[bi])}</div>`);
+      dots+=`<circle cx="${this.X(q.x[bi])}" cy="${this.Y(q.y[bi])}" r="4.5" fill="${q.color}" stroke="#fff" stroke-width="2"/>`;}});
+    hg.innerHTML=`<line x1="${hpx}" x2="${hpx}" y1="${this.y1}" y2="${this.y0}" stroke="${C.muted}"/>${dots}`;
+    this.tip.innerHTML=`<div>${(s.fx||(v=>fx(v,v<10?1:0)))(hx)} ${s.xunit||''}</div>`+rows.join('');
+    this.tip.hidden=false; const r=this.wrap.getBoundingClientRect(), tw=this.tip.offsetWidth;
+    let l=e.clientX-r.left+14; if(l+tw>r.width)l=e.clientX-r.left-tw-14;
+    this.tip.style.left=Math.max(0,l)+'px'; this.tip.style.top=Math.max(0,e.clientY-r.top-14)+'px';
+  }
+  unhover(){this.tip.hidden=true;const h=this.sv.querySelector('.hair');if(h)h.innerHTML='';}
+}
+const lin=(a,b,n)=>Array.from({length:n},(_,i)=>a+(b-a)*i/(n-1));
+
+/* ---------- brain images ---------- */
+const SEG=(()=>{const b=atob('AP8A/wD/AP8A/wBPAwQCBQMFAgIAAQMIAIQDAgILAwMCAgEBAgMDBAIEAwEAfgIQAwMCDwMCAHkCBQEBAgoBAQIDAwECAwECAhAAcwIGAQICCwEBAgMDAQIEAQICBgECAggDAQBtAgMDAQIGAQcCBQECAgMDAQIDAQQCAwEFAgcDAQICAGgDAQICAQECCQEHAgQBAwIHAQ0CAQEBAgEBAQIBAQECAQMBAgEDAQICAGICDwEOAgMDAgIDARECAwMBAgYAXwIHAQICBQEQAgkBEAIMAFsDAQICAQECBQECAgUBEQIDAwECAwERAgYBAQIGAFkDAQIFAQICAgECAgYBCwIIAwECBwENAgYBAgIGAwEAVgIGAQQCAQECAgYBCgIJAwECCAELAgMDAQIDAQICBwMBAFMCAQMBAgcBAwIJAQoCCAMCAgkBCgIHAQICCQBRAgYBAQICAQQCCQEJAggDCQIDAQkCCAECAgoATgMBAgcBBwIKAQgCCAMKAgMBCAIIAQICAgEBAggATAMCAggBBgIKAQgCCAMDAgYDAgIDAQcCBAMBAgMBBQIJAEoDAgIJAQYCCgEIAggDAwILAQcCBAMBAgMBBgIIAwEASAMDAgMBAQIFAQYCCgEKAgcDAQIMAQgCAwMBAgMBBgIEAQECAwMBAEcDAwIEAQECBQEGAgoBDAIKAQMCBQEIAgMDAQICAQYCBQEBAgMDAQIBAEUDAwIFAQICBAEGAgoBDgIEAwECBAEEAgMBCAIGAQUCBQECAgYARAMBAgYBAwIFAQUCCgEOAgUDAQIEAQ4CAgMBAgMBBgICAQMCCABCAwECBwEFAgMBBQIJAQoCAwEBAgEBAQIKAQ0CAgMBAgIBDAIIAEEDAgIGAQ8CCAEJAhIBDAIFAQwCCQBAAwECBQERAgcBCAIVAQsCBAETAgMAQAMBAgUBEgIEAQkCFwEfAgEBAQIDAEADAQIIARACAQELAgoDAwIDAQECBgEcAggAQAMBAgcBAQIBARsCEAECAgUBGgIKAD8DAgIIAR0CDwEEAgEBGgIMAD8DAgIJASMCCAEeAgsBAQIBAD8DAQIJASQCCQEcAgQDAQIJAD8DBAIGASICBgMBAggBFwIFAwYCBAA+AwYCBAEfAgkDBAIIARQCBwMEAgYAPQMBAgkBHgILAwMCCQESAgUBAQINADwDAQIIAR4CDQMDAggBEQIFAQICDQMCADkDAgIDAQsCAQEBAgUBEQINAwECCQERAgYBDAIEAwEAOQMCAgUBCgIHARECCAEBAg0BEAIIAQgCAgECAgMDAQA5AwICBwEGAgoBEQIFAQMCCwERAgkBBgIJAwEAOAMEAgcBBQILARcCBwEVAgoBBgIJAwEAOAMDAgIDAwIDAQUCDAEVAgcBFQILAQYCCQA5AwECCgEFAgwBFAIEAwECAwEVAgsBBwIEAwQAOAMCAgoBAwIFAwMCBwERAgYDAQIEAQwCAQEGAgwBCAIEAwMAOAMBAgQBAQIFAQQCBAMHAgUBBwIBAQoCAgMBAgEDAQIDAQwCAQEGAhABBQIDAwQAOAMCAgMBCgIKAwECBgEFAgEDAQIBAQsCAQMCAQ4CAgEGAgkDAgIFAQQCBQMBAgEDAgA4AgYBCAIRAQUCAQMCAgEBCwICAQ0CAQMCAgEBBQIKAwQCAwEDAggDAQA4AwICBgEHAgwDAQIDAQUCAQMDAgEBGAIBAwMCAQEFAhABBAIJADgCAQMDAgUBDAIKAQUCAQMEAgEBFgIBAwQCAQEFAhABBAIJAwEAOAICAwMCBAEMAggBBgIBAwUCAQEUAgEDBQIBAQYCCQEBAgMBCAIBAQMCAwMBAgEANQIHAwECAwELAgkBBgIBAwYCAQESAgEDBgIBAQYCCgEOAgYANAIMAQcCDQEGAgEDBwIBARADCAIBAQYCCgENAggAMgMBAgwBBQIPAQYCAQMIAgEBDQIBAwkCAQEHAg4BCAIIADEDAgIDAQMCBAEGAgoDAQIFAQcCAQMJAgEBCgIBAwoCAQEHAg8BCAIHAwEAMAMCAgQBDAIDAwgCBQEHAgIDCAICAQcCAQMMAQgCBQMBAgIDAQIHAQsCBAAwAwICBAELAgYDAwIHAQgCBAMIAgQBAQIBAwwCAgEIAgQDBQIGAQwCBAAwAwICBAEDAgIBBwIPAQcCBwMGAgIDAQICAwwCAgEKAgYDAQIGAQQCBAEFAgQAMAMBAgQBAQIGAQcCDAEIAgkDBgIDAwoCBAEBAgIBCAIMAQMCCAEDAgQAMAMBAg0BAQIBAQMCCwEJAgoDBAIBAwECAgMJAgcBCgIJAQQCCgEDAgMDAQAvAwECHAEKAgsDBQICAwgCCQEKAhgBAQIDAwEALgMCAhwBCwIKAwUCAgMHAggBDAITAwECCAMBAC4DAgIcAQsCCwMEAgIDBgIIAQECAQELAhQDAQIHAwEALgMBAhwBDAIMAwMCAgMGAgoBCwIUAwMCBQMBAC4DAQIcAQECAQEDAgEBAgIBAQMCAQEBAgoDAwICAwUCCQENAg8BAgIJAwECAQMBAC4DAQIBAwECGwEFAgEBAQIBAQUCCgMDAgIDBQIEAQECBQEHAgEBBAIIAQICBAEEAggDAwAuAwQCDQEBAgwBBQIBAQICAQEFAgkDAwICAwQCBwEBAgEBCQICAQMCCQEKAggDAQIBAC8DAwIOAQICCgEDAgMBAwIBAQUCCAMDAgIDBAIHAQECAQEOAgsBCwIGAwEALwMBAhABAwIJAQQCAgEJAgMBAQIEAwMCAgMEAgEBAQIGAQkCAgEEAgQDAwIHAQICAgEGAgQDAQIBAC4DAQIQAQICCgECAgQBCQIDAQECBAMDAgIDBAIBAQECAQEBAgEBAQIBAQwCAQEEAgMDBAIMAQQCBAMCAC0CEQEDAgoBAQIGAQYCAQEBAggDAwICAwQCAQEBAgEBAQIEAQYCAQEFAgEBAwIEAwQCDAEEAgQDAQAtAgUBDgIKAQICBgEHAgQBAQIEAwMCAQMFAgUBCQIBAQECAQEBAgEBAQIBAQMCBQMDAgsBBQIFAwEAKwMBAgYBBQIBAQICAQEBAgwBAwIFAQECAQEHAggDAwICAwQCBgEOAgIBBAIDAwcCBgEIAgMDAQArAwICBQEDAhMBAwIHAQcCBwMLAgIBAQICAQ8CAQEEAgMDBgIGAQUCCAAsAgEDAgIEAQICEgEEAgYBAQIBAQcCBgMLAgQBAQIBAQgCAwEEAgEBBAIDAwQCBQEFAgoDAQArAwQCAwECAgsDAwIEAQQCBAEBAgIBCQIFAwQCAgMFAgQBAQIBAQgCAQECAgEBAgICAQUCCQEGAgsDAQAsAwMCBAEBAgUDBAIDAwMCAwEEAgcBCQIEAwUCAgMFAgYBBgIBAQICAwEBAgEBBwIJAQUCBAMDAgYALAMBAgYBAgIFAwICCgEDAgMBAQICAQECAgEJAgMDBQICAwUCAgEBAgEBAQIBAQ8CAQEEAgkBBQIOACsCCAECAhEBAgIBAQECAgEBAgIBAQICAQgCBAMFAgIDBgIEAQwCAQEHAgoBBQIOACsCCAEEAg4BBAIEAQICAgEJAgQDBQICAwYCBQEJAgEBAwIBAQUCDQECAg4AKgMBAgMBAQIEAQQCCgEHAgEBAQIGAQoCBAMEAgQDBQIEAQwCAQEBAgEBAQIBAQMCDQEDAgYBAwIDAwEAKQMCAgUBBwIMAQICAQEDAgIBAQIFAQkCBAMCAgMBAgICAwQCBAEKAgEBAwIBAQECAQEDAg4BAgICAQcCAwMBAgEAJwMBAggBBQIOAQECAQECAgEBBQIBAQsCBAMCAgMBAgICAwQCBAEKAgMBCQILAQwCBQAmAwECCQEFAgUDAQIJAQQCAQEBAgMBDgIGAQQCAwMCAgQBCwIBAQUCAQEEAgsBDAIGACQDAQIKAQECAQEDAgUDAgIIAQMCAQEBAgEBAQIDAQ4CBQEFAgMDAQIEARcCCgEPAgMDAQAiAwICBAEBAgQBAgIBAQQCDwECAgEBAgIEARACAQEBAgIBBAIGAQ4CAQEEAgEBBAIKARECAwAiAwICBAEIAgEBBAIMAQQCAQECAgEBAQICARACAQEBAgIBBQIFAQ4CAQEEAgEBBAILAQoCCQAhAwICBAEHAgMBBQIKAQgCAgESAgEBAQICAQUCAwEPAgIBAQIBAQgCCwEIAgoDAQAgAwICBAEFAgcBAwIKAQkCAQERAgEBAgICAQECAQECAgMBEQIBAQECAQEIAgsBBwILAwEAIAMCAgQBAgIKAQICDAEHAgIBDQIBAQUCAwEBAgEBAgICAR0CCwEHAgsDAQAfAwICBAECAgsBAgIHAwECBQETAgEBBQIBAQECAQEBAgEBAQIBAQECAgEeAgoBBQIKAQECAwMBAB8DAgIEAQMCEwMBAgYBFAIBAQcCAQEBAgEBAQICAQICAQEcAgkBBAIJAQMCAwMBAB8DAgIEAQMCFAMBAgUBEwICAQUCAQEBAgYBHwIIAQMCCwEDAgMDAQAfAwICBAEDAhADAQIJARICAQEJAgUBAQIBAR0CCQECAgwBAgIEAwEAIAMBAgUBBgILAwECCQEVAgEBAQIBAQUCAgMBAgIBHQIGAwECBQEBAgsBAwIEAwEAIAMCAgQBCAIIAwICCAEXAgEBBgIFAQcCAQEUAgcDAQIQAQMCBQMBACADAgIIAQQCCAMCAgUBIAIDAwECAgECAgEBGQIGAwQCCwEGAgQDAgAgAwICCgEDAg8BGQIBAQECAQECAgEBAgIBAwECAgEcAggDAwIIAQgCBAMCACEDAQILAQQCDwEYAgEBAwIBAQICAQMBAgEBHgIHAwICCAEJAgUDAgAgAwECAQMCAgcBCQIMARsCAgEBAgEDAQEDAgEBHgIEAwMCBgEEAgMBBAIFAwEAIQIBAwECBgEHAgMBAwIEAwECBQEUAgEBAwIBAQECAQEBAgEBAQICAQMCAQEFAgEBFwIFAwMCBQEDAgYBBAIEAwEAIQIGAQgCBgECAgkBHgICAQMCAgEbAg0BAwIGAQYCAwMBACECCAEDAgEBAwIPAQwCAQEIAgEBBQICAQICAgEDAgIBGgIMAQMCCAECAgcDAQAhAgEDAQIHAQICAgECAg8BFwIBAQECAQEBAgIBAgICAQMCAwEFAgEBEwIMAQMCBwECAggDAQAgAwECAQMCAgYBAgICAQICDwEXAgIBAgIDAQECAgEDAgIBGgIMAQICBwEDAggDAQAgAwECAQMBAgcBAwIBAQECAQEBAg8BFgIHAQECAgECAgQBGgIGAwECBAEBAgcBBQIHAwEAIAMBAgcBCQILAwECAwEVAgUDAQICAQECAgEBAgcBGAIKAQICBwEFAgcDAQAgAwECBQEMAgkDAgIEARQCBAMDAgEBAQICAQECAgMBAgUBFwIJAQICCAEDAgkDAQAgAgQBAwIGAQYCBwMDAgUBEgIEAwQCAQEBAgIBAQIBAwMCBQECAgIBEQIKAQECBAMBAgQBAwIJAwEAHwMBAhABBAIEAwUCBwENAgEBAgIEAwQCAQEBAgIBAQIBAwQCCQEOAhcBAgIJAwEAHwMBAhgDBAIIAQwCBwMFAgEBAQICAQEDBQIKAQ0CFwEDAgkAHwMBAhgDAwIGAwECAgEKAgkDAwIDAQECAgEBAwQCCAMCAgEBAQIBAQoCFwEJAgQAHwIBAwECDgMBAgcDBAIJAQkCAQMCAgUDAQICAwQCAQEBAgIBAQIBAwMCBQMBAgIDAwIDAQkCCQMCAgcBCAIKAB8DAgIKAwECCgMFAgkBCAIBAwMCAwMCAgIDBQECAgIBAQIBAwUCAwMBAgEDBAIEAQcCCAMDAgcBBAIOAwEAHgMCAgkDBQIQAQMCAgEJAwQCAgMBAgMDBQIBAQYDBgICAwcCAwEHAggDAwIFAQMCEQMBAB4DAgIIAwICBwEDAgsBDAIBAw4CAQEIAwYCAQMIAgIBBgIJAwICEgMBAgcDAQAeAwICAwEBAgUDAQIHAQcCBgEBAgEBCgIBAw4CAQEKAgEDDQICAQYCHAMBAggDAQAdAwMCAwEDAg4BBgIGAQoDDQICAQwCAQMOAQcCGgMBAggDAgAdAwMCBAECAhABBQICAwICAgEIAgEDDAIBAQ8CAQMNAgEBBgIaAwICBwMCAB0DAwIEAQMCEgECAgYBCAMMAgEBEQIBAw0BCAIYAwMCBgMCAB0DAwIEAQQCAwEDAhIBCAIBAwoCAQEUAgEDDAIBAQcCCQEBAgEBAQIDAQQCBAMFAgUDAQAeAwQCBAEKAg0BAQICAQkCAQMJAgEBFgIBAwsCAQEHAgUBDAIGAwQCBgAfAwQCBAEMAgYDAQIEAQwCAQMIAgEBGAIBAwsBCQIBAQsCCwMEAgQAHwMEAgQBDwIIAQwCAQMHAgIBGQIBAwoBDgITAwMCAwMBAB8DBAIDARICBAENAgIDBQIDARsCAQMJAQ0CFQMDAgIAIAMBAgEDAgIDAQMCBAEdAgIDAwIDAQ0CAwENAgEDCAEMAhYDBQAhAwMCDwEZAgYBDQIFAQ0CAQMGAgEBDAIXAwQAIQMBAgEDAgIPARgCBgEMAgYBDQICAwUCAQENAhcDAQICACEDAQIBAwMCDgEaAgMBDQIHAQ0CAwMBAgIBEAIYACEDAgICAwECDgEbAgEBDAILAQsCBAETAg0DAQIJACEDAQILAQECAQErAg4BDAIBARQCCwMDAgoAIAMBAgQBNQIPAR8CGQAeAwICBAEzAgMBAgIMAR8CFAEBAgMDAQAfAwICBQEEAg0BJQIIAQECBAEfAhIBAQIEAwEAHwMCAgYBAQIQASQCCAElAhABAgIEAwEAHwMCAhgBIwIJASkCCAEEAgQDAgAfAwMCEwEBAgIBIgIBAQICBwE2AgQDAQAhAwICEwEjAgwBNQIFAwEAIQMCAhEBJAINAQMCAQExAgUDAQAhAwMCDgEmAgwBAgIDASwCAgEEAgQAIwMCAg0BJwISASkCBgEBAgUAJAMDAgoBKAITARsCBQEIAgsDAQAmAwQCBQEqAhIBHQIHAQUCCwAoAwQCBQEqAgEBAQIGAwECCAEYAgIBAwIIAQQCCgMBACgDAgIEAQECAQEwAgoBGQIDAQICCgEEAgkDAQAoAwECBQEyAgcBGwIFAQICCgEDAgYDBAAoAwECBQErAgEBBgIGARwCEgEDAgYDAgAoAwICBQEdAgQBCwIBAQUCBgEcAhMBAwIFAwIAKAIBAwECBAECAg0BDwIFAQsCAQEEAgUBHgISAQMCBgMBACgDAgIEAQECDgEPAgUBEAIFAQICAwEZAg4DAQIEAQMCBQMBACkDAQIEAQICDQEPAgYBDwILAQgCAQEBAgEBDgINAwECAwEDAgUDAQAqAwICAwECAgwBEQIGAQ4CCwEGAgYBDgIRAQICBAMCACsDAQIEAQICDwENAgcBDQILAQUCBgEPAhEBAgIDAwIALAMCAgQBBAINAQUCAQEHAggBBAIBAQYCCgEFAgcBEAIQAQECBAMCACwDAgIEAQQCDQEEAgQBBgIHAQQCAwEEAgoBBQIGARICDwEBAgQDAQAuAwICBAEEAgwBBAIEAQcCCAEBAgUBAwIJAQUCBwEGAgMBCwIRAwIALgMCAgQBBAILAQUCBAEHAg8BAgIJAQQCBwEHAgYBDAINAwEAMAMCAgMBBAILAQQCBQEIAgIDAQILAQICCAEEAggBBgIHAQ0CCwMCADADAgIDAQQCCwEEAgUBCAICAwECDAEBAgcBBQIHAQgCBgEQAgcDAgAyAwICAwECAgsBBQIGAQcCAQEBAg0BAQIGAQUCCQEHAgcBEAIEAwQAMgMCAgMBAwICAwICBgEFAgYBBwIDAwECEgEFAgkBBwIHAQoCBgEBAgQDAgA1AwECDwEFAgYBCAIGAQUCCgEEAgsBBgIJAQkCCQMCADcCDwEFAgcBBwIGAQQCCgEEAggDAQIGAQQCCAEJAgkDAQA5Ag4BBQIIAQYCBQEBAgEBAwIKAQMCCgMBAgUBBAIIAQQCAgEEAgcDAQA7Ag4BBAIIAQYCAwMBAgMBBAIJAQICCwMBAgYBBAIHAQMCAwEDAgUDAQIBAD0DAQIGAQQCAwEHAgYBBAIHAQECAQEFAhsBBQIGAQMCBAECAgUDAQA/AwECAQMBAgQBAwIEAQYCBgEDAgkBBgIDAwECDwMBAgcBBQIGAQMCBAEBAgYAQQMDAgQBAQIEAQcCBgEDAgoBBQIDAwECDwMBAgcBBQIFAQQCCAMBAgEDAQBCAwECBQEBAgUBBgIGAQMCCgEDAgwDAQICAQICBAMBAggBAwIFAQYCBwMBAgEAQwMCAgQBAQIFAQcCBQEDAgoBAwIMAwECAQEDAgEBAQILAQMCBQECAgMBAQIIAwEARAMCAgoBBQIGAQQCCgECAgMBAQIEAQICAgMBAgEBBQIGAQECAwEDAgYBAQIFAQECBgMBAEUDAgINAQMCAgMBAgIBBAIEAQECBQECAgIBAgIEAQMCBQEEAgUBAgICAQMCAgMBAgMBAQIFAQECBQMCAEUDBAIUAQMCAwEDAgUBBQIEAQMCBgEDAgQBCAIMAQECBQMBAEgDAwISAQUCAgEDAgUBBgIDAQMCBwECAgUBCAIKAQECBQMBAEoDAwISAQkCBQEFAgQBAwICAQICAwEDAgMBCgINAwIATAMDAhABCgIFAQQCBgECAgIBAwICAQMCBQEBAgEBAQICAQQCCwMCAE4DBAIJAwECAwELAg8BAgICAQgCDAECAgMDAgIFAwEAUQMFAgcDAQIDAQsCCgMBAgUBCwIRAwICAwMBAFUDBgIKAQkCCQMBAgcBBQICAQQCEwMCAFgDBQAFAgwBAgIRAQMCAwEGAgMDBwIEAwMAZQINAQECEwEBAgMBBQIEAwQCAwMEAGgCEgAGAgkDAQIDAQQCAQEBAgIDAgIDAwQAbAIPAAgCCAMBAg4DBABvAwECDAAKAhMDAQB3AwMCBgANAwICDAMEAHkDBgAaAwUA/wB7'),o=new Uint8Array(192*160);let p=0;for(let i=0;i<b.length;i+=2){const v=b.charCodeAt(i),n=b.charCodeAt(i+1);o.fill(v,p,p+n);p+=n;}return o;})();
+function mulberry(a){return()=>{a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+function noiseField(seed){const r=mulberry(seed),f=new Float32Array(SEG.length);for(let i=0;i<f.length;i++)f[i]=Math.sqrt(-2*Math.log(1-r()))*Math.cos(2*Math.PI*r());return f;}
+const NOISE=[noiseField(11),noiseField(29),noiseField(47)];
+function drawBrain(cv,sig,{sigma=0,noise=0,hi=1}={}){
+  const c=cv.getContext('2d'),im=c.createImageData(160,192),n=NOISE[noise];
+  for(let i=0;i<SEG.length;i++){const l=SEG[i],s=l?sig[l-1]:0,v=clamp(Math.abs(s+n[i]*sigma)/hi,0,1)*255,p=i*4;im.data[p]=im.data[p+1]=im.data[p+2]=v;im.data[p+3]=255;}
+  c.putImageData(im,0,0);
+}
+function brainFig(box,cap){const f=el('figure','brain'),cv=el('canvas');cv.width=160;cv.height=192;const c=el('figcaption',null,cap||'');f.append(cv,c);box.append(f);return {cv,cap:c};}
+
+/* ---------- labs ---------- */
+const LAB={
+warmup(b){
+  const row=el('div','brains');b.append(row);
+  const P=[['A',2000,60,20,'Long TE, small flip'],['B',600,5,90,'Short TR, large flip'],['C',3000,4,15,'Long TR, short TE, small flip']];
+  const figs=P.map(([n,TR,TE,f],i)=>{const g=brainFig(row,`Image ${n}`);const s=imageSignal(3,TR,TE,f,{pd:true});const m=Math.max(...s);drawBrain(g.cv,s,{sigma:1/200,noise:i,hi:m});return g;});
+  const table=el('div');b.append(table);
+  return {onStep(n){figs.forEach((g,i)=>{const[k,TR,TE,f,d]=P[i];g.cap.innerHTML=n>=1?`<b>Image ${k}</b><br>TR ${fx(TR)} ms, TE ${TE} ms, ${f}°<br>${d}`:`<b>Image ${k}</b>`;});}};
+},
+q1(b){
+  const ct=el('div','ctls');b.append(ct);
+  const a=slider(ct,{label:`Tissue 1 ${T2s}`,min:20,max:150,value:60,unit:'ms',onInput:d});
+  const c=slider(ct,{label:`Tissue 2 ${T2s}`,min:20,max:200,value:100,unit:'ms',onInput:d});
+  presets(b,'Try',[{t:'60 and 100 ms',f(){a.set(60,1);c.set(100)}},{t:'50 and 51 ms',f(){a.set(50,1);c.set(51)}},{t:'60 and 61 ms',f(){a.set(60,1);c.set(61)}}]);
+  const ch=new Chart(b.appendChild(el('div')));
+  const set=tiles(b,[['best','Best TE'],['max','Contrast at best TE'],['t10','Contrast at TE 10 ms'],['t77','at TE 77 ms'],['t160','at TE 160 ms']]);
+  function d(){
+    const A1=a.value,A2=c.value,x=lin(0,200,401),S=T=>x.map(t=>Math.exp(-t/T)),te=optimumTE(A1,A2);
+    ch.draw({x:[0,200],y:[0,1.04],xlab:'TE (ms)',ylab:'Relative signal',xunit:'ms',series:[
+      {name:`T2* ${A1} ms`,color:C.wm,x,y:S(A1)},{name:`T2* ${A2} ms`,color:C.gm,x,y:S(A2)},{name:'Contrast',color:C.ink,w:3,x,y:x.map(t=>contrastTE(t,A1,A2))}],
+      vlines:[{x:10,label:'c',color:C.muted},{x:77,label:'a',color:C.muted,row:0},{x:160,label:'b',color:C.muted}],
+      points:[{x:te,y:contrastTE(te,A1,A2),label:`Best ${fx(te,1)} ms`}]});
+    set('best',fx(te,1)+' ms');set('max',fx(contrastTE(te,A1,A2),3));set('t10',fx(contrastTE(10,A1,A2),3));set('t77',fx(contrastTE(77,A1,A2),3));set('t160',fx(contrastTE(160,A1,A2),3));
+  }
+  d();
+},
+q2(b){
+  const ct=el('div','ctls');b.append(ct);
+  const t=slider(ct,{label:T1,min:500,max:5000,step:10,value:4000,unit:'ms',onInput:d});
+  const r=slider(ct,{label:'TR',min:50,max:4000,step:10,value:1000,unit:'ms',onInput:d});
+  presets(b,'Try',[{t:'Script: T1 4000, TR 1000',f(){t.set(4000,1);r.set(1000)}},{t:'3 T grey matter, TR 2000',f(){t.set(1330,1);r.set(2000)}},{t:'3 T grey matter, TR 500',f(){t.set(1330,1);r.set(500)}}]);
+  const ch=new Chart(b.appendChild(el('div')));
+  const tb=el('div');b.append(tb);
+  function d(){
+    const T=t.value,R=r.value,e=Math.round(ernst(R,T)),F=[e/2,e,90],names=[`Half Ernst ${fx(e/2,1)}°`,`Ernst ${e}°`,'90°'],col=[C.wm,C.gm,C.csf],n=25,x=lin(1,n,n);
+    const sigs=F.map(f=>approach(T,R,f,n));
+    ch.draw({x:[1,n],xn:6,xlab:'Excitation number',ylab:'Relative signal',xunit:'',fx:v=>'Excitation '+v,series:F.map((f,i)=>({name:names[i],color:col[i],x,y:sigs[i]})),hlines:F.map((f,i)=>({y:spgr(f,R,T),color:col[i]}))});
+    tb.innerHTML=`<table class="mini"><tr><th>Flip angle</th><th>Signal after 10 excitations</th><th>Steady state</th><th>Within 1% of steady state at excitation</th></tr>`+
+      F.map((f,i)=>`<tr><td><span class="sw" style="background:${col[i]}"></span>${names[i]}</td><td>${fx(sigs[i][9],3)}</td><td>${fx(spgr(f,R,T),3)}</td><td>${settleCount(T,R,f)}</td></tr>`).join('')+'</table>';
+  }
+  d();
+},
+q3(b){
+  const ct=el('div','ctls');b.append(ct);
+  const t=slider(ct,{label:`Tissue ${T1}`,min:800,max:2500,step:10,value:2000,unit:'ms',onInput:d});
+  const r=slider(ct,{label:'TR',min:500,max:5000,step:50,value:2000,unit:'ms',onInput:d});
+  presets(b,'Try',[{t:'T1 2000 ms',f(){t.set(2000)}},{t:'7 T grey matter, 1800 ms',f(){t.set(1800)}},{t:'3 T grey matter, 1330 ms',f(){t.set(1330)}}]);
+  const ch=new Chart(b.appendChild(el('div')));
+  const set=tiles(b,[['e0','Ernst angle, 3 T grey matter'],['e1','Ernst angle, chosen tissue'],['s','Signal lost at chosen T1 if flip stays at the 3 T value']]);
+  function d(){
+    const T=t.value,R=r.value,x=lin(0,120,241),e0=ernst(R,1330),e1=ernst(R,T);
+    ch.draw({x:[0,120],xlab:'Flip angle (°)',ylab:'Relative signal',xunit:'°',series:[{name:'T1 1330 ms',color:C.gm,x,y:x.map(f=>spgr(f,R,1330))},{name:`T1 ${fx(T)} ms`,color:C.wm,x,y:x.map(f=>spgr(f,R,T))}],
+      points:[{x:e0,y:spgr(e0,R,1330),color:C.gm,label:fx(e0,0)+'°',dy:-10},{x:e1,y:spgr(e1,R,T),color:C.wm,label:fx(e1,0)+'°',dx:-9,anchor:'end',dy:16}]});
+    set('e0',fx(e0,1)+'°');set('e1',fx(e1,1)+'°');set('s',fx(100*(1-spgr(e0,R,T)/spgr(e1,R,T)),1)+'%');
+  }
+  d();
+},
+q4(b){
+  const ct=el('div','ctls');b.append(ct);
+  const m=slider(ct,{label:'Multiband factor',min:1,max:8,value:6,onInput:d,fmt:v=>`${v} (TR ${fx(3000/v)} ms)`});
+  const t=slider(ct,{label:`Grey matter ${T1}`,min:1000,max:2000,step:10,value:1330,unit:'ms',onInput:d});
+  const ch=new Chart(b.appendChild(el('div')));
+  const set=tiles(b,[['e','Ernst angle at this TR'],['s','Signal at Ernst'],['k','Signal if flip stays at the TR 3000 value'],['l','Signal lost by not changing flip']]);
+  function d(){
+    const T=t.value,R=3000/m.value,x=lin(0,120,241),e0=ernst(3000,T),e1=ernst(R,T);
+    ch.draw({x:[0,120],xlab:'Flip angle (°)',ylab:'Relative signal',xunit:'°',series:[{name:'TR 3000 ms',color:C.gm,x,y:x.map(f=>spgr(f,3000,T))},{name:`TR ${fx(R)} ms`,color:C.wm,x,y:x.map(f=>spgr(f,R,T))}],
+      points:[{x:e0,y:spgr(e0,3000,T),color:C.gm,label:fx(e0,0)+'°',dy:-10},{x:e1,y:spgr(e1,R,T),color:C.wm,label:'Ernst '+fx(e1,0)+'°',dy:-10},{x:e0,y:spgr(e0,R,T),color:C.csf,label:'kept at '+fx(e0,0)+'°',dx:-9,anchor:'end',dy:18}]});
+    set('e',fx(e1,1)+'°');set('s',fx(spgr(e1,R,T),3));set('k',fx(spgr(e0,R,T),3));set('l',fx(100*(1-spgr(e0,R,T)/spgr(e1,R,T)),0)+'%');
+  }
+  d();
+},
+q5(b){
+  const ct=el('div','ctls');b.append(ct);
+  let mode='3d';
+  segmented(b,'Encoding',[{v:'2d',t:'One 2D slice'},{v:'3d',t:'3D, two phase-encoded directions'},{v:'pe3',t:'All three phase-encoded'}],mode,v=>{mode=v;stop();d();});
+  const n=slider(ct,{label:'Matrix per direction',min:64,max:256,step:8,value:200,onInput:()=>{stop();d();}});
+  const r=slider(ct,{label:'TR',min:5,max:2000,value:600,unit:'ms',log:true,onInput:()=>{stop();d();}});
+  const g=slider(ct,{label:'Parallel imaging factor',min:1,max:4,value:1,onInput:()=>{stop();d();}});
+  const k=el('div','kspace');b.append(k);
+  const cv=el('canvas');cv.width=200;cv.height=200;k.append(cv);
+  const right=el('div');right.innerHTML='<div class="kclock"></div><div class="cap" style="text-align:left;margin:4px 0 10px"></div>';k.append(right);
+  const play=el('button','go','Play the scan');play.type='button';right.append(play);
+  const set=tiles(b,[['l','Phase-encode lines (one per TR)'],['t','Scan time']]);
+  const clockEl=right.querySelector('.kclock'),capEl=right.querySelector('.cap'),cx=cv.getContext('2d');
+  let raf=0;
+  const lines=()=>{const N=n.value,R=g.value;return mode==='2d'?N/R:mode==='3d'?N*N/R:N*N*N/R;};
+  function dur(ms){const s=ms/1000,m=s/60;if(s<120)return fx(s,0)+' s';if(m<1440)return fx(m,0)+' min';return fx(m,0)+' min';}
+  function paint(p){cx.fillStyle=C.zero;cx.fillRect(0,0,200,200);cx.fillStyle=C.ink;
+    if(mode==='2d'){const h=4;cx.fillRect(0,98,200*p,h);}else{const rows=Math.floor(p*50),rem=p*50-rows;cx.fillRect(0,0,200,rows*4);cx.fillRect(0,rows*4,200*rem,4);}}
+  function d(){const L=lines(),T=L*r.value;set('l',fx(L));const days=T/86400000;set('t',dur(T),days>=2?`(${fx(days,1)} days)`:'');clockEl.textContent=dur(T);capEl.textContent=mode==='2d'?'One line of k-space per TR':'Each point of this plane is one line, read out along the third direction';paint(0);}
+  function stop(){cancelAnimationFrame(raf);raf=0;play.textContent='Play the scan';}
+  play.onclick=e=>{if(e.detail)play.blur();if(raf){stop();d();return;}
+    if(matchMedia('(prefers-reduced-motion:reduce)').matches){d();return;}
+    const T=lines()*r.value,t0=performance.now(),D=6000;play.textContent='Stop';
+    const tick=now=>{const p=Math.min(1,(now-t0)/D);paint(p);clockEl.textContent=dur(p*T);if(p<1)raf=requestAnimationFrame(tick);else stop();};
+    raf=requestAnimationFrame(tick);};
+  d();
+},
+q6(b){
+  const ct=el('div','ctls');b.append(ct);
+  const r=slider(ct,{label:'TR',min:3,max:2000,value:600,unit:'ms',log:true,onInput:d});
+  presets(ct,'Try',[{t:'TR 600 ms',f(){r.set(600)}},{t:'TR 6 ms',f(){r.set(6)}}]);
+  const row=el('div','row');b.append(row);
+  const chh=el('div');row.append(chh);const ch=new Chart(chh,{w:540,h:340});
+  const side=el('div','side');side.style.flex='0 0 clamp(250px,38%,480px)';row.append(side);const br=el('div','brains');side.append(br);
+  const g1=brainFig(br,''),g2=brainFig(br,'');
+  const set=tiles(b,[['o','Best contrast flip'],['c','Contrast at best flip'],['w','Ernst angle, white matter'],['g','Ernst angle, grey matter']]);
+  const TA=830,TB=1330;
+  function d(){
+    const R=r.value,x=lin(0,120,241),o=bestContrastFlip(TA,TB,R);
+    ch.draw({x:[0,120],xlab:'Flip angle (°)',ylab:'Relative signal',xunit:'°',series:[{name:'WM T1 830 ms',short:'WM',color:C.wm,x,y:x.map(f=>spgr(f,R,TA))},{name:'GM T1 1330 ms',short:'GM',color:C.gm,x,y:x.map(f=>spgr(f,R,TB))},{name:'Contrast',color:C.ink,w:3,x,y:x.map(f=>Math.abs(spgr(f,R,TA)-spgr(f,R,TB)))}],
+      points:[{x:o.flip,y:o.contrast,label:`Best ${fx(o.flip,1)}°`}]});
+    const s1=imageSignal(3,R,3,o.flip),s2=imageSignal(3,R,3,90),hi=Math.max(...s1,...s2);
+    drawBrain(g1.cv,s1,{sigma:hi/200,noise:0,hi});drawBrain(g2.cv,s2,{sigma:hi/200,noise:1,hi});
+    g1.cap.textContent=`Flip ${fx(o.flip,0)}°`;g2.cap.textContent='Flip 90°';
+    set('o',fx(o.flip,1)+'°');set('c',fx(o.contrast,4));set('w',fx(ernst(R,TA),1)+'°');set('g',fx(ernst(R,TB),1)+'°');
+  }
+  d();
+},
+q7(b){
+  const TA=830,TB=1330,c600=bestContrastFlip(TA,TB,600),c6=bestContrastFlip(TA,TB,6);
+  const ct=el('div','ctls');b.append(ct);let fair=true;
+  const k=slider(ct,{label:'Scan time, in TR-600 acquisitions',min:1,max:16,value:1,onInput:d});
+  segmented(ct,'Compare with',[{v:true,t:'Equal scan time'},{v:false,t:'Equal number of averages'}],true,v=>{fair=v;d();});
+  const row=el('div','row');b.append(row);
+  const chh=el('div');row.append(chh);const ch=new Chart(chh,{w:440,h:340,ml:50});
+  const br=el('div','brains');br.style.flex='1 1 0';row.append(br);
+  const g1=brainFig(br,''),g2=brainFig(br,'');
+  const set=tiles(b,[['a','Contrast × 100, TR 600'],['b','Contrast × 100, TR 6'],['x','Per √ms, TR 600'],['y','Per √ms, TR 6'],['g','TR 6 advantage']]);
+  const TRs=[];for(let t=1;t<=5000;t*=1.15)TRs.push(t);
+  const eff=TRs.map(t=>efficiency(TA,TB,t));
+  const SNR0=40;
+  const sig=(TR,f)=>imageSignal(3,TR,3,f);
+  function d(){
+    ch.draw({x:[1,5000],logx:true,y:[0,0.8],xlab:'TR (ms), log scale',ylab:'Contrast × 100 per √ms',xunit:'ms',fx:v=>fx(v,v<10?1:0),series:[{name:'Efficiency at the best flip',short:'',color:C.ink,w:3,x:TRs,y:eff}],
+      points:[{x:6,y:efficiency(TA,TB,6),color:C.wm,label:'TR 6',dy:-10,dx:0,anchor:'middle'},{x:600,y:efficiency(TA,TB,600),color:C.gm,label:'TR 600',dy:18,dx:-6,anchor:'end'}]});
+    const n1=k.value,n2=fair?100*k.value:k.value,s1=sig(600,c600.flip),s2=sig(6,c6.flip);
+    const sg=n=>1/(SNR0*Math.sqrt(n));
+    drawBrain(g1.cv,s1,{sigma:sg(n1),noise:0,hi:Math.max(...s1)*1.15});drawBrain(g2.cv,s2,{sigma:sg(n2),noise:1,hi:Math.max(...s2)*1.15});
+    const cnr=(s,n)=>Math.abs(s[0]-s[1])/sg(n);
+    g1.cap.innerHTML=`<b>TR 600 ms</b>, ${fx(n1)} average${n1>1?'s':''}<br>CNR ${fx(cnr(s1,n1),1)}`;
+    g2.cap.innerHTML=`<b>TR 6 ms</b>, ${fx(n2)} average${n2>1?'s':''}<br>CNR ${fx(cnr(s2,n2),1)}`;
+    const e6=efficiency(TA,TB,6),e600=efficiency(TA,TB,600);
+    set('a',fx(c600.contrast*100,1));set('b',fx(c6.contrast*100,1));set('x',fx(e600,3));set('y',fx(e6,3));set('g','+'+fx(100*(e6/e600-1),1)+'%');
+  }
+  d();
+},
+q8(b){
+  const ct=el('div','ctls');b.append(ct);let ord='interleaved',auto=true;
+  const mv=slider(ct,{label:'Move along z',min:-100,max:100,step:5,value:50,onInput:d,fmt:v=>(v>0?'+':'')+v+'% of a slice'});
+  const r=slider(ct,{label:'TR',min:300,max:3000,step:50,value:2500,unit:'ms',onInput:()=>{d();}});
+  const fl=slider(ct,{label:'Flip angle',min:5,max:90,value:75,unit:'°',onInput:(v,user)=>{if(user)auto=false;d();}});
+  const pr=el('div','presets');ct.append(pr);
+  segmented(pr,'',[{v:'interleaved',t:'Interleaved'},{v:'sequential',t:'Sequential'}],ord,v=>{ord=v;d();});
+  presets(b,'Try',[{t:'TR 2500 ms',f(){auto=true;r.set(2500)}},{t:'Fast protocol, TR 500 ms',f(){auto=true;r.set(500)}},{t:'Use Ernst angle',f(){auto=true;d();}},{t:'No motion',f(){mv.set(0)}}]);
+  const row=el('div','row');b.append(row);
+  const chh=el('div');row.append(chh);const ch=new Chart(chh,{title:'Signal change in two slices',w:470,h:340,ml:50});
+  const hh=el('div','sliced');row.append(hh);
+  const set=tiles(b,[['a','First slice after the move, same volume'],['b','Last slice before the move, next volume'],['w','Largest change two volumes after the move'],['n','Volumes with any slice changed by over 1%']]);
+  const T1v=1300;
+  hh.innerHTML='<h3 class="panel-title">Signal change by slice and volume</h3><div class="plot" style="min-height:0"><div class="svgbox"></div><div class="tip" hidden></div></div>';
+  const hBox=hh.querySelector('.svgbox'),hTip=hh.querySelector('.tip'),hWrap=hh.querySelector('.plot');
+  let cur=null;
+  hWrap.addEventListener('pointermove',e=>{const c=e.target.closest&&e.target.closest('rect[data-v]');if(!c){hTip.hidden=true;return;}const v=+c.dataset.v,s=+c.dataset.s;hTip.innerHTML=`Volume ${v+1}, slice ${s+1}<br>${fx(cur.dev[v][s],1)}%`;hTip.hidden=false;const R=hWrap.getBoundingClientRect();let l=e.clientX-R.left+12;if(l+130>R.width)l-=150;hTip.style.left=l+'px';hTip.style.top=Math.max(0,e.clientY-R.top-16)+'px';});
+  hWrap.addEventListener('pointerleave',()=>{hTip.hidden=true;});
+  const mix=(a,b,t)=>{const p=h=>[1,3,5].map(i=>parseInt(h.substr(i,2),16)),x=p(a),y=p(b);return `rgb(${x.map((v,i)=>Math.round(v+(y[i]-v)*t)).join(',')})`;};
+  function d(){
+    const R=r.value;if(auto)fl.set(Math.round(ernst(R,T1v)),1);
+    const sim=spinDeviation({TR:R,T1:T1v,flip:auto?ernst(R,T1v):fl.value,order:ord,shiftPct:mv.value});cur=sim;
+    const{dev,ord:o,half,moveVol:mvV}=sim,N=48,after=o[half],before=o[half-1],x=lin(1,20,20);
+    const A=dev.map(rw=>rw[after]),B=dev.map(rw=>rw[before]);
+    const lim=Math.max(5,...A.map(Math.abs),...B.map(Math.abs))*1.15;
+    ch.draw({x:[7,20],xn:6,y:[-lim,lim],xlab:'Volume number',ylab:'Signal change (%)',fx:v=>'Volume '+v,fy:v=>fx(v,1)+'%',xunit:'',series:[{name:'First slice after the move',short:'After',color:C.wm,x,y:A},{name:'Last slice before the move',short:'Before',color:C.gm,x,y:B}],vlines:[{x:mvV+1,label:'Move',color:C.muted}]});
+    /* heatmap */
+    const W=440,H=340,ml=44,mt=6,mb=46,mr=10,vols=[8,9,10,11,12,13,14,15].map(v=>v),cw=(W-ml-mr)/vols.length,chh2=(H-mt-mb)/N,range=20;let g='';
+    vols.forEach((v,ci)=>{for(let s=0;s<N;s++){const val=clamp(dev[v][s]/range,-1,1),col=val<0?mix(C.zero,C.loss,-val):mix(C.zero,C.gain,val);g+=`<rect data-v="${v}" data-s="${s}" x="${(ml+ci*cw).toFixed(1)}" y="${(mt+s*chh2).toFixed(2)}" width="${(cw-1).toFixed(1)}" height="${(chh2+0.3).toFixed(2)}" fill="${col}"/>`;}
+      g+=`<text class="t-axis" x="${ml+ci*cw+cw/2}" y="${H-mb+17}" text-anchor="middle">${v+1}</text>`;});
+    [0,11,23,35,47].forEach(s=>{g+=`<text class="t-axis" x="${ml-6}" y="${mt+s*chh2+chh2/2+4.5}" text-anchor="end">${s+1}</text>`;});
+    g+=`<text class="t-title" transform="translate(13 ${(mt+H-mb)/2}) rotate(-90)" text-anchor="middle">Slice</text>`;
+    const bx=ml+6,by=H-14,bw=120;for(let i=0;i<40;i++){const t=i/39*2-1;g+=`<rect x="${bx+i*bw/40}" y="${by-8}" width="${bw/40+.5}" height="9" fill="${t<0?mix(C.zero,C.loss,-t):mix(C.zero,C.gain,t)}"/>`;}
+    g+=`<text class="t-axis" x="${bx-2}" y="${by}" text-anchor="end">−20%</text><text class="t-axis" x="${bx+bw+3}" y="${by}">+20%</text><text class="t-title" x="${W-mr}" y="${by}" text-anchor="end">Volume</text>`;
+    hBox.innerHTML=`<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Heat map of signal change by slice and volume">${g}</svg>`;
+    const worst=(rw)=>rw.reduce((m,v)=>Math.abs(v)>Math.abs(m)?v:m,0);
+    const sg=v=>(v>0?'+':'')+fx(v,1)+'%';
+    set('a',sg(A[mvV]));set('b',sg(B[mvV+1]));set('w',sg(worst(dev[mvV+2])));
+    let cnt=0;for(let v=mvV;v<20;v++)if(Math.abs(worst(dev[v]))>=1)cnt++;set('n',String(cnt));
+  }
+  d();
+},
+bonus(b){
+  const ct=el('div','ctls');b.append(ct);
+  const s0=slider(ct,{label:'Image SNR at the Ernst angle',min:20,max:1000,value:300,log:true,onInput:d});
+  const lim=slider(ct,{label:'tSNR limit set by physiological noise',min:40,max:200,value:85,onInput:d});
+  const f=slider(ct,{label:'Your flip angle',min:5,max:90,value:30,unit:'°',onInput:d});
+  presets(b,'Try',[{t:'High SNR, 3 mm voxels',f(){s0.set(300)}},{t:'Thermal noise dominates, sub-mm voxels',f(){s0.set(30)}}]);
+  const ch=new Chart(b.appendChild(el('div')));
+  const set=tiles(b,[['e','Ernst angle'],['s','Signal at your flip, vs Ernst'],['t','tSNR at your flip, vs Ernst'],['m','Lowest flip within 5% of the best tSNR']]);
+  const TR=2000,T=1330,e=ernst(TR,T),S=a=>spgr(a,TR,T)/spgr(e,TR,T);
+  function d(){
+    const x=lin(1,120,239),L=lim.value,S0=s0.value,tmax=tsnr(S0,L),R=a=>tsnr(S0*S(a),L)/tmax;
+    ch.draw({x:[0,120],y:[0,1.08],xlab:'Flip angle (°)',ylab:'Relative to the Ernst angle',xunit:'°',fy:v=>fx(v*100,0)+'%',series:[{name:'Signal (image SNR)',short:'Signal',color:C.muted,x,y:x.map(S)},{name:'tSNR',color:C.wm,w:3,x,y:x.map(R)}],
+      vlines:[{x:e,label:`Ernst ${fx(e,0)}°`,color:C.muted}],points:[{x:f.value,y:R(f.value),color:C.wm,label:`${fx(R(f.value)*100,0)}%`,dy:-10},{x:f.value,y:S(f.value),color:C.muted,label:`${fx(S(f.value)*100,0)}%`,dy:18}]});
+    let m=e;for(let a=e;a>=0.5;a-=0.25){if(R(a)>=0.95)m=a;else break;}
+    set('e',fx(e,1)+'°');set('s',fx(S(f.value)*100,0)+'%');set('t',fx(R(f.value)*100,0)+'%');set('m',fx(m,0)+'°');
+  }
+  d();
+},
+console(b){
+  let field=3,inv=false,pd=false,seed=0,best=0;
+  const ct=el('div','ctls');b.append(ct);
+  const tr=slider(ct,{label:'TR',min:3,max:6000,value:600,unit:'ms',log:true,onInput:d});
+  const te=slider(ct,{label:'TE',min:1,max:200,value:20,unit:'ms',onInput:d});
+  const fl=slider(ct,{label:'Flip angle',min:1,max:120,value:60,unit:'°',onInput:d});
+  const ti=slider(ct,{label:'TI (inversion)',min:50,max:3000,step:10,value:900,unit:'ms',onInput:d});
+  const sn=slider(ct,{label:'Base SNR',min:20,max:400,step:10,value:200,onInput:d});
+  const opt=el('div','presets');b.append(opt);
+  segmented(opt,'Field',[{v:1.5,t:'1.5 T'},{v:3,t:'3 T'},{v:7,t:'7 T'}],3,v=>{field=v;d();});
+  const mk=(id,txt,on)=>{const l=el('label','check');const c=el('input');c.type='checkbox';c.id=id;c.onchange=()=>on(c.checked);l.append(c,document.createTextNode(txt));opt.append(l);};
+  mk('c-inv','Inversion pulse',v=>{inv=v;d();});mk('c-pd','Proton density',v=>{pd=v;d();});
+  presets(opt,'',[{t:'T1-weighted',f(){tr.set(600,1);te.set(5,1);fl.set(90)}},{t:'T2*-weighted',f(){tr.set(2000,1);te.set(40,1);fl.set(20)}},{t:'BOLD EPI-like',f(){tr.set(2000,1);te.set(30,1);fl.set(77)}},{t:'New noise',f(){seed=(seed+1)%3;d();}}]);
+  const row=el('div','row');b.append(row);
+  const a1=el('div');row.append(a1);const c1=new Chart(a1,{title:'Longitudinal magnetisation',w:380,h:310,ml:50});
+  const a2=el('div');row.append(a2);const c2=new Chart(a2,{title:'Transverse decay',w:380,h:310,ml:50});
+  const br=el('div','side');row.append(br);const hold=el('div','brains');br.append(hold);const g=brainFig(hold,'');
+  const set=tiles(b,[['w','WM signal'],['g','GM signal'],['c','CSF signal'],['t','Scan time, 192 lines'],['cnr','GM/WM CNR, one acquisition'],['s','GM/WM CNR in 5 minutes']]);
+  function d(){
+    const TR=tr.value,TE=Math.min(te.value,TR,200),F=fl.value,opts={inv:inv&&ti.value<TR,TI:ti.value,pd};
+    const S=imageSignal(field,TR,TE,F,opts),cols=[C.wm,C.gm,C.csf],names=['WM','GM','CSF'];
+    const curves=[0,1,2].map(i=>mzCurve(field,TR,F,opts,i));
+    let lo=0,hi=0;curves.forEach(c=>c[1].forEach(v=>{if(v<lo)lo=v;if(v>hi)hi=v;}));
+    const xs=curves[0][0];
+    c1.draw({x:[xs[0],xs[xs.length-1]],y:[lo*1.1,hi*1.12||1],xlab:'Time since excitation (ms)',ylab:'Relative Mz',xunit:'ms',series:curves.map((c,i)=>({name:names[i],color:cols[i],x:c[0],y:c[1]})),vlines:opts.inv?[{x:0,color:C.muted},{x:TR,color:C.muted},{x:ti.value,label:'TI',color:C.muted}]:[{x:0,color:C.muted},{x:TR,color:C.muted}]});
+    const mx=Math.max(1,TE*3<200?Math.max(TE*2.5,30):200),tx=lin(0,mx,120),T2v=TISSUE[field].T2s;
+    c2.draw({x:[0,mx],y:[0,1.05],xlab:'TE (ms)',ylab:'Relative Mxy',xunit:'ms',series:T2v.map((t,i)=>({name:names[i],color:cols[i],x:tx,y:tx.map(v=>Math.exp(-v/t))})),vlines:[{x:TE,label:'TE',color:C.muted}]});
+    const m=Math.max(...S)||1,SNR=sn.value;
+    drawBrain(g.cv,S,{sigma:1/SNR,noise:seed,hi:m});
+    const cn=Math.abs(S[0]-S[1])*SNR,sc=192*TR,nav=Math.floor(300000/sc),five=nav>=1?cn*Math.sqrt(nav):0;
+    if(five>best)best=five;
+    g.cap.innerHTML=`WM SNR ${fx(S[0]*SNR,1)}`;
+    set('w',fx(S[0],3));set('g',fx(S[1],3));set('c',fx(S[2],3));
+    set('t',sc/1000<120?fx(sc/1000,1)+' s':fx(sc/60000,1)+' min');set('cnr',fx(cn,1));set('s',nav>=1?fx(five,1):'Too slow',`best ${fx(best,1)}`);
+  }
+  d();
+}
+};
+
+
+
+/* ---------- questions shown to students (no answers, no notes) ---------- */
+const Q=[{"id":"warmup","kicker":"Warm-up","lab":"warmup","noCurtain":true,"stem":"Same brain, same 3 T scanner, three protocols. Which image used TR 600 ms, TE 5 ms and a 90° flip?","opts":[["a","Image A"],["b","Image B"],["c","Image C"]]},{"id":"q1","kicker":"Question 1 of 8","lab":"q1","noCurtain":false,"stem":"Two tissues have the same proton density and <i>T</i><sub>1</sub>, but <i>T</i><sub>2</sub>* of 60 and 100 ms. Which gradient-echo setting gives the stronger contrast?","opts":[["a","TR 1000 ms, TE 77 ms, <i>α</i> 90°"],["b","TR 1000 ms, TE 160 ms, <i>α</i> 90°"],["c","TR 1000 ms, TE 10 ms, <i>α</i> 90°"]]},{"id":"q2","kicker":"Question 2 of 8","lab":"q2","noCurtain":false,"stem":"Repeat a gradient-echo excitation with fixed TR and <i>α</i>. The steady state is reached:","opts":[["a","After two volumes"],["b","Instantaneously"],["c","It depends on TR, flip angle and <i>T</i><sub>1</sub>"]]},{"id":"q3","kicker":"Question 3 of 8","lab":"q3","noCurtain":false,"stem":"Grey matter has <i>T</i><sub>1</sub> = 1330 ms at 3 T. With TR 2000 ms the maximum signal is at about 77°. If <i>T</i><sub>1</sub> were longer, as at 7 T, the best flip for the same TR would be:","opts":[["a","Bigger than 77°"],["b","77°"],["c","Smaller than 77°"]]},{"id":"q4","kicker":"Question 4 of 8","lab":"q4","noCurtain":false,"stem":"With TR 3000 ms the best flip for grey matter is about 84°. Simultaneous multi-slice with factor 6 makes the sequence much faster. The best flip should:","opts":[["a","Increase above 84°"],["b","Stay at 84°"],["c","Decrease below 84°"]]},{"id":"q5","kicker":"Question 5 of 8","lab":"q5","noCurtain":false,"stem":"A gradient-echo sequence encodes one line of k-space per TR. A 3D volume of 200 × 200 × 200 with TR 600 ms takes:","opts":[["a","400 min"],["b","80,000 min"],["c","2 min"]]},{"id":"q6","kicker":"Question 6 of 8","lab":"q6","noCurtain":false,"stem":"Two tissues have <i>T</i><sub>1</sub> of 830 and 1330 ms, as WM and GM at 3 T. With TR 600 ms the best contrast is at a flip of about 85°. With TR 6 ms the best-contrast flip is:","opts":[["a","The same"],["b","Reduced"],["c","Increased"]]},{"id":"q7","kicker":"Question 7 of 8","lab":"q7","noCurtain":false,"stem":"WM and GM signal differences are 15.2 at TR 600 ms and 1.6 at TR 6 ms. SNR grows with the square root of the number of averages. Which gives the most contrast in a given amount of time?","opts":[["a","TR 6 ms"],["b","TR 600 ms"],["c","They are the same"]]},{"id":"q8","kicker":"Question 8 of 8","lab":"q8","noCurtain":false,"stem":"In a 2D EPI run (TR 2500 ms) the subject moves along z by half a slice, halfway through a volume. Motion correction is available. Which statement holds?","opts":[["a","Signal variations are expected but can be modelled if the motion is known"],["b","Signal variations are expected but will only affect one volume"],["c","Once you perform motion correction, you are good"],["d","It’s complicated"]]},{"id":"bonus","kicker":"Bonus: the fMRI twist","lab":"bonus","noCurtain":false,"stem":"A 3 T fMRI run has image SNR 300 at the Ernst angle (77°), and physiological noise limits tSNR to about 85. Lowering the flip to 30° loses 40% of the signal. tSNR will be:","opts":[["a","About 40% lower"],["b","Within about 10% of its value at the Ernst angle"],["c","Higher than at the Ernst angle"]]},{"id":"console","kicker":"Free play","lab":"console","noCurtain":true,"stem":"You have 5 minutes of scan time at 3 T. Who can reach the highest GM/WM contrast-to-noise?","opts":[]}];
+
+
+/* ---------- student view: driven entirely by applyState(q, step, reveal) ---------- */
+const main=document.getElementById('main'),whereEl=document.getElementById('where'),stepsEl=document.getElementById('steps');
+const votes={};
+let cur={q:-1,step:0,reveal:null},view=null;
+
+function buildQuestion(i){
+  const q=Q[i]; main.innerHTML=''; CHARTS.length=0; clipN=0;
+  const ask=el('section','ask');
+  const fold=el('button','fold','<span></span><em>Show question</em>');fold.type='button';
+  const body=el('div','ask-body');
+  body.append(el('div','kicker',q.kicker),el('h1','stem',q.stem));
+  const btns={};
+  if(q.opts.length){
+    const ol=el('ol','opts');
+    q.opts.forEach(([k,t])=>{const li=el('li');const b=el('button','opt',`<b>${k}</b><span>${t}</span><em></em>`);b.type='button';b.onclick=()=>castVote(k);li.append(b);ol.append(li);btns[k]=b;});
+    body.append(ol);
+  }
+  ask.append(fold,body);
+  fold.onclick=()=>{const c=ask.classList.toggle('closed');fold.querySelector('em').textContent=c?'Show question':'Hide question';};
+  const ex=el('div','explain');ex.hidden=true;ex.style.display='none';ex.setAttribute('aria-live','polite');
+  const wait=el('section','wait');
+  const lab=el('section','lab'),labBody=el('div','lab-body');lab.append(labBody);
+  main.append(ask,ex,wait,lab);
+  view={i,ask,fold,btns,ex,wait,lab,labBody,api:null,built:false};
+}
+function ensureLab(){ if(view.built)return; view.built=true; view.api=LAB[Q[view.i].lab](view.labBody)||null; }
+
+function castVote(k){
+  const id=Q[cur.q].id; if(cur.step>0||!live.db)return;
+  const next=votes[id]===k?null:k, before=votes[id];
+  votes[id]=next||undefined; paint();
+  live.db.ref('votes/'+id+'/'+live.uid).set(next).catch(()=>{votes[id]=before; paint();});
+}
+
+function paint(){
+  const q=Q[cur.q],n=cur.step,v=votes[q.id],R=cur.reveal;
+  whereEl.textContent=q.kicker;
+  [...stepsEl.children].forEach((li,j)=>li.classList.toggle('on',j===n));
+  Object.entries(view.btns).forEach(([k,b])=>{
+    const right=!!(R&&R.correct===k);
+    b.disabled=n>0; b.classList.toggle('vote',v===k&&!right); b.classList.toggle('right',right);
+    b.querySelector('em').textContent=right?'✓ Correct':(v===k?'Your vote':'');
+  });
+  const hasOpts=q.opts.length>0, compact=n>=1&&hasOpts;
+  view.ask.classList.toggle('compact',compact);
+  if(compact){
+    if(!view.wasCompact){view.ask.classList.add('closed');view.fold.querySelector('em').textContent='Show question';}
+    let s=v?`Your vote: ${v}`:'You did not vote';
+    if(R&&R.correct) s=v?(v===R.correct?`Your vote: ${v}. Correct`:`Your vote: ${v}. Answer: ${R.correct}`):`Answer: ${R.correct}`;
+    view.fold.querySelector('span').textContent=s;
+  } else view.ask.classList.remove('closed');
+  view.wasCompact=compact;
+  const showLab=n>=1||q.noCurtain;
+  view.lab.style.display=showLab?'':'none';
+  view.wait.style.display=showLab?'none':'';
+  if(!showLab){view.wait.innerHTML=v?'<h2>Vote received</h2><p>You can change it until the simulation starts.</p>':'<h2>Tap an answer</h2><p>The simulation opens after the vote.</p>';}
+  else { ensureLab(); }
+  if(view.api&&view.api.onStep)view.api.onStep(n);
+  if(R){view.ex.innerHTML=R.explain;view.ex.style.display='';}else{view.ex.style.display='none';}
+}
+/* the single entry point the live connection will call */
+function applyState(q,step,reveal){
+  const newQ=q!==cur.q, changed=newQ||step!==cur.step;
+  cur={q,step,reveal:reveal||null};
+  if(newQ)buildQuestion(q);
+  paint();
+  if(changed)window.scrollTo(0,0);
+}
+let rT=0;
+addEventListener('resize',()=>{clearTimeout(rT);rT=setTimeout(()=>CHARTS.forEach(c=>{if(c.s)c.draw(c.s);}),120);});
+
+/* ---------- live connection ---------- */
+const live={db:null,uid:null,voteRef:null,voteId:null};
+function notice(title,msg){ view=null; cur={q:-1,step:0,reveal:null}; CHARTS.length=0; whereEl.textContent=''; [...stepsEl.children].forEach(li=>li.classList.remove('on'));
+  main.innerHTML='<section class="wait"><h2></h2><p></p></section>'; main.querySelector('h2').textContent=title; main.querySelector('p').textContent=msg; }
+function watchMyVote(id){
+  if(live.voteId===id)return;
+  if(live.voteRef)live.voteRef.off();
+  live.voteId=id; live.voteRef=live.db.ref('votes/'+id+'/'+live.uid);
+  live.voteRef.on('value',s=>{ votes[id]=s.val()||undefined; if(view&&Q[view.i].id===id)paint(); },()=>{});
+}
+(async function(){
+  const cfg=window.FIREBASE_CONFIG;
+  if(!window.firebase||!cfg){notice('Could not load','Check the Wi-Fi connection and reload this page.');return;}
+  if(/PASTE_/.test(JSON.stringify(cfg))){notice('Not set up yet','The Firebase settings have not been added to firebase-config.js.');return;}
+  notice('Connecting','One moment.');
+  firebase.initializeApp(cfg);
+  const cred=await firebase.auth().signInAnonymously();
+  live.uid=cred.user.uid; live.db=firebase.database();
+  const me=live.db.ref('presence/'+live.uid), netEl=document.getElementById('net');
+  let seen=false;
+  live.db.ref('.info/connected').on('value',s=>{
+    if(s.val()===true){seen=true;netEl.textContent='';me.onDisconnect().remove().then(()=>me.set(true)).catch(()=>{});}
+    else if(seen){netEl.textContent='Reconnecting';}
+  });
+  live.db.ref('live').on('value',s=>{
+    const L=s.val();
+    if(!L){notice('Waiting for the session','Keep this page open. The first question will appear here.');return;}
+    watchMyVote(L.qid);
+    applyState(L.q,L.step,L.reveal||null);
+  },()=>notice('Could not connect','Reload this page.'));
+})().catch(()=>notice('Could not connect','Check the Wi-Fi connection and reload this page.'));
+</script>
+</body>
+</html>
